@@ -15,13 +15,7 @@ from sqlalchemy.sql import exists
 
 db_session = Session()
 
-
-# def write_msg(user_id, message):
-#     vk_session = vk_api.VkApi(token=config.access_token)
-#     vk_session.method('messages.send',
-#                       {'user_id': user_id, 'message': message, 'keyboard': 'keyboard', 'random_id': get_random_id()})
-
-
+    
 def state_manager(vk, user, user_text):
     keyboard = VkKeyboard(inline=True)
 
@@ -72,6 +66,23 @@ def state_manager(vk, user, user_text):
 
             user.state = 'default'
             db_session.commit()
+
+    elif user.state == 'search_city':
+
+        city_id = vk_api.VkApi(token=config.user_token).get_api().database.getCities(
+            country_id=1, q=user_text, count=1, v='5.131')['items'][0]['id']
+
+        user.search_city = city_id
+        keyboard.add_button('Настройки поиска', color=VkKeyboardColor.PRIMARY)
+        vk.messages.send(
+            peer_id=user.user_id,
+            random_id=get_random_id(),
+            keyboard=keyboard.get_keyboard(),
+            message='Сохранено'
+        )
+        user.state = 'default'
+        db_session.commit()
+
     elif user.state == 'search_sex':
         if user_text in ['парни', 'девушки', 'не имеет значения']:
             if user_text == 'парни':
@@ -169,7 +180,15 @@ def search_settings(vk, user, user_text):
             random_id=get_random_id(),
             message='С какого возраста ищем?'
         )
-        
+    elif user_text == 'город':
+        user.state = 'search_city'
+        db_session.commit()
+
+        vk.messages.send(
+            peer_id=user.user_id,
+            random_id=get_random_id(),
+            message='Введи свой город'
+        )
     elif user_text == 'пол':
         user.state = 'search_sex'
         db_session.commit()
@@ -266,7 +285,7 @@ def main():
 
                     if user_text in ['дальше', 'начать', 'начать поиск']:
                         user_search(vk, user, session)
-                    elif user_text in ['настройки поиска', 'возраст', 'пол', 'семейное положение']:
+                    elif user_text in ['настройки поиска', 'возраст', 'пол', 'город', 'семейное положение']:
                         search_settings(vk, user, user_text)
                     elif user_text == 'посмотреть страницу':
                         vk.messages.send(
